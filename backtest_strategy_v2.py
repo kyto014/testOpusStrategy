@@ -611,7 +611,8 @@ def calculate_metrics(trades, equity_curve, initial_capital, final_capital):
     df_equity['Returns'] = df_equity['Equity'].pct_change()
     avg_return = df_equity['Returns'].mean()
     std_return = df_equity['Returns'].std()
-    # Assuming 15-min candles: 4 per hour * 24 * 365 = 35040 periods per year
+    # Theoretical periods per year for 15-min candles: 4 per hour * 24 * 365 = 35,040
+    # Note: Using theoretical count for standardized annualization
     periods_per_year = 35040
     sharpe_ratio = (avg_return / std_return) * np.sqrt(periods_per_year) if std_return > 0 else 0
     
