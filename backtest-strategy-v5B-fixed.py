@@ -9,10 +9,11 @@ V5B LONG conditions:
 - Volume > 1.8x Volume SMA 20
 - Price change < -0.6%
 
-V4 SHORT conditions:
-- RSI < 50
-- Volume > 1.5x Volume SMA 20
-- Close price < Lower BB OR price change < -0.5%
+V4 SHORT conditions (highly selective):
+- RSI between 38 and 46 (bearish range, not extreme oversold)
+- Volume > 1.8x Volume SMA 20
+- Close price < Lower BB AND price change < -0.6% (both required)
+- Close < BB middle (bearish market structure)
 """
 
 import pandas as pd
@@ -143,7 +144,7 @@ class BacktestStrategy:
             return False
         
         # 1. RSI in specific bearish range (not extreme oversold)
-        rsi_condition = row['rsi'] >= 38 and row['rsi'] < 46
+        rsi_condition = 38 <= row['rsi'] < 46
         
         # 2. Volume confirmation (high volume matching LONG)
         volume_condition = row['volume'] > row['volume_sma_20'] * 1.8
