@@ -289,7 +289,7 @@ class AdaptiveStrategyV3:
             if regime == 'TRANSITIONING':
                 sl_multiplier = 1.8
             else:
-                sl_multiplier = 2.8  # Very wide SL for trend trades
+                sl_multiplier = 2.8  # Wide SL (2.8 x ATR) to avoid premature stops in volatile trends
             tp1_mult = 2.2
             tp2_mult = 4.0
             tp3_mult = 6.5
@@ -298,7 +298,7 @@ class AdaptiveStrategyV3:
             if regime == 'TRANSITIONING':
                 sl_multiplier = 2.2
             else:
-                sl_multiplier = 3.5  # Extremely wide SL for mean reversion
+                sl_multiplier = 3.5  # Wider SL (3.5 x ATR) - mean reversion needs room for price to return to mean
             tp1_mult = 0.7  # Quick first target
             tp2_mult = 1.4  # Second target
             tp3_mult = None
@@ -550,8 +550,8 @@ class AdaptiveStrategyV3:
                 self.daily_pnl = 0.0
                 self.day_start_equity = equity
                 
-                # Check if new week
-                if row['DateTime'].weekday() < self.last_date.weekday():
+                # Check if new week using ISO week number
+                if row['DateTime'].isocalendar()[1] != pd.Timestamp(self.last_date).isocalendar()[1]:
                     self.weekly_pnl = 0.0
                     self.week_start_equity = equity
             

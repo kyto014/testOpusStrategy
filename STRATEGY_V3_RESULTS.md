@@ -1,6 +1,6 @@
 # Adaptive Regime-Switching Strategy V3 - Results
 
-**Date:** 2026-02-17 15:30:30
+**Date:** 2026-02-17 15:32:21
 
 ## Overall Performance
 
