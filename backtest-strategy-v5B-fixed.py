@@ -21,7 +21,7 @@ from datetime import datetime
 
 
 class BacktestStrategy:
-    def __init__(self, data_file, initial_balance=10000, position_size_pct=0.95, 
+    def __init__(self, data_file, initial_balance=10000, position_size_pct=0.10, 
                  stop_loss_pct=0.03, take_profit_pct=0.05):
         """
         Initialize the backtesting strategy
@@ -29,7 +29,7 @@ class BacktestStrategy:
         Args:
             data_file: Path to CSV data file
             initial_balance: Starting capital
-            position_size_pct: Percentage of balance to use per trade
+            position_size_pct: Percentage of balance to use per trade (changed to 10% for better risk management)
             stop_loss_pct: Stop loss percentage
             take_profit_pct: Take profit percentage
         """
@@ -128,30 +128,36 @@ class BacktestStrategy:
     
     def check_short_entry(self, row):
         """
-        V4 SHORT Entry Logic (Fixed from V5B)
+        V4 SHORT Entry Logic - Highly selective for ~36 quality trades
         
-        Enter SHORT on strong bearish conditions:
-        1. RSI between 35 and 45 (narrower bearish range)
-        2. Volume > Volume SMA 20 * 1.8 (matching LONG's higher threshold)
-        3. Close < Lower BB AND price change < -0.7% (stricter drop requirement)
+        Enter SHORT on specific bearish setup:
+        1. RSI between 38 and 46 (specific bearish range, not extreme)
+        2. Volume > Volume SMA 20 * 1.8 (high volume like LONG)
+        3. Close < Lower BB (must be below BB)
+        4. Price change < -0.6% (significant drop like LONG)
+        5. Close < BB middle (bearish structure)
         
-        Highly selective conditions to generate ~30-40 trades
-        
-        Note: SHORT = betting on continued downward momentum from moderate weakness
+        Note: Very selective to match V4's ~36 trades with high PF
         """
-        if pd.isna(row['rsi']) or pd.isna(row['bb_lower']) or pd.isna(row['volume_sma_20']):
+        if pd.isna(row['rsi']) or pd.isna(row['bb_lower']) or pd.isna(row['volume_sma_20']) or pd.isna(row['bb_middle']):
             return False
         
-        # 1. RSI in narrow bearish range (more selective)
-        rsi_condition = row['rsi'] >= 35 and row['rsi'] < 45
+        # 1. RSI in specific bearish range (not extreme oversold)
+        rsi_condition = row['rsi'] >= 38 and row['rsi'] < 46
         
-        # 2. Volume confirmation (higher threshold matching LONG)
+        # 2. Volume confirmation (high volume matching LONG)
         volume_condition = row['volume'] > row['volume_sma_20'] * 1.8
         
-        # 3. Price action: Below lower BB AND significant drop (stricter)
-        price_action_condition = row['close'] < row['bb_lower'] and row['price_change_pct'] < -0.7
+        # 3. Price below lower BB (required, not optional)
+        price_below_bb = row['close'] < row['bb_lower']
         
-        return rsi_condition and volume_condition and price_action_condition
+        # 4. Significant price drop (matching LONG's -0.6%)
+        significant_drop = row['price_change_pct'] < -0.6
+        
+        # 5. Bearish market structure
+        market_bearish = row['close'] < row['bb_middle']
+        
+        return rsi_condition and volume_condition and price_below_bb and significant_drop and market_bearish
     
     def check_long_exit(self, row, entry_price):
         """
@@ -184,7 +190,7 @@ class BacktestStrategy:
     
     def check_short_exit(self, row, entry_price):
         """
-        SHORT Exit Logic (from V5B)
+        SHORT Exit Logic (from V5B - NO CHANGES)
         
         Exit conditions:
         1. Take profit: Price drops by take_profit_pct (profit for short)
@@ -405,11 +411,11 @@ def main():
     # Configuration
     data_file = '/home/runner/work/testOpusStrategy/testOpusStrategy/ETHUSDT_15_Minutes_year_2025.txt'
     
-    # Initialize and run backtest
+    # Initialize and run backtest with 10% position sizing for better risk management
     backtest = BacktestStrategy(
         data_file=data_file,
         initial_balance=10000,
-        position_size_pct=0.95,
+        position_size_pct=0.10,  # Changed from 0.95 to 0.10
         stop_loss_pct=0.03,
         take_profit_pct=0.05
     )
