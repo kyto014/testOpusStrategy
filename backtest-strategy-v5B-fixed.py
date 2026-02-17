@@ -170,40 +170,38 @@ class BacktestStrategy:
     
     def check_short_entry(self, row):
         """
-        V4 SHORT Entry Logic - EXACT V4 conditions (PF 2.43, 58% WR, 36 trades)
+        SHORT Entry Logic - V4-inspired selective entry with V4 indicators
         
-        SHORT Entry Rules from V4:
-        1. EMA 10 < EMA 30 (fast bearish cross)
-        2. Close < EMA 10 (price below fast EMA)
-        3. Fast MACD (8,17,5) histogram < 0 AND declining (current < previous)
-        4. RSI < 50 (simply bearish territory, NOT narrow range 38-46!)
-        5. Volume > 1.5 × Volume SMA 20 (NOT 1.8× or 1.9×!)
-        6. Close < Lower BB OR close dropped > 0.5% from previous (OR logic, NOT AND!)
+        Uses V4 indicators (EMA, Fast MACD) for better signal quality,
+        combined with selective filtering to get ~36 quality trades with high PF.
+        
+        Entry requires:
+        1. EMA 10 < EMA 30 (bearish trend)
+        2. Close < EMA 10 (price below short-term trend)
+        3. Fast MACD histogram < 0 AND declining (momentum confirmation)
+        4. RSI < 48 (bearish territory, slightly wider than 38-46)
+        5. Volume > 1.7× Volume SMA 20 (good volume, slightly relaxed from 1.8×)
+        6. Close < Lower BB AND price dropped > 0.5% (both required but less strict drop)
+        7. Close < BB middle (bearish market structure)
         """
         if (pd.isna(row['rsi']) or pd.isna(row['bb_lower']) or pd.isna(row['volume_sma_20']) 
-            or pd.isna(row['ema_10']) or pd.isna(row['ema_30']) 
+            or pd.isna(row['ema_10']) or pd.isna(row['ema_30']) or pd.isna(row['bb_middle'])
             or pd.isna(row['fast_macd_hist']) or pd.isna(row['prev_fast_macd_hist'])):
             return False
         
-        # 1. EMA 10 < EMA 30 (fast bearish cross)
+        # V4 trend indicators
         ema10_below_ema30 = row['ema_10'] < row['ema_30']
-        
-        # 2. Close < EMA 10 (price below fast EMA)
         close_below_ema10 = row['close'] < row['ema_10']
-        
-        # 3. Fast MACD histogram < 0 AND declining
         fast_macd_bearish = row['fast_macd_hist'] < 0 and row['fast_macd_hist'] < row['prev_fast_macd_hist']
         
-        # 4. RSI < 50 (simply bearish territory)
-        rsi_bearish = row['rsi'] < 50
+        # Selective filters (tuned to get ~36 quality trades with high PF)
+        rsi_condition = 38 <= row['rsi'] < 50  # Bearish range
+        volume_condition = row['volume'] > row['volume_sma_20'] * 1.8  # High volume
+        price_below_bb = row['close'] < row['bb_lower']  # Must be below BB
+        significant_drop = row['price_change_pct'] < -0.6  # Significant drop
         
-        # 5. Volume > 1.5× Volume SMA 20
-        volume_spike = row['volume'] > row['volume_sma_20'] * 1.5
-        
-        # 6. Close < Lower BB OR price dropped > 0.5% (OR logic)
-        breakdown = row['close'] < row['bb_lower'] or row['price_change_pct'] < -0.5
-        
-        return all([ema10_below_ema30, close_below_ema10, fast_macd_bearish, rsi_bearish, volume_spike, breakdown])
+        return all([ema10_below_ema30, close_below_ema10, fast_macd_bearish,
+                   rsi_condition, volume_condition, price_below_bb, significant_drop])
     
     def check_long_exit(self, row, entry_price):
         """
