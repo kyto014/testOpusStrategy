@@ -136,11 +136,64 @@ V5A achieved:
 - 169 trades
 - -0.05% return
 
+## Detailed Analysis
+
+### What Happened
+
+The V5A short-only strategy underperformed expectations with the following key observations:
+
+1. **High Stop Loss Rate (66.3%)**: The majority of trades hit stop loss, suggesting:
+   - The tight stop loss (0.7 × ATR) may be too aggressive for the market conditions
+   - The entry conditions may be catching knife-falls that continue further down
+   - Market volatility in 2025 may have been different from the V4 test period
+
+2. **Very Short Trade Duration (2.1 candles / 0.5 hours)**: 
+   - Most trades are exiting within 30 minutes
+   - This suggests the strategy is being stopped out quickly before having a chance to recover
+   - The mean-reversion thesis may not be holding in these specific conditions
+
+3. **Low Profit Per Trade**:
+   - Avg winning trade: $0.60
+   - Avg losing trade: $-0.67
+   - The risk-reward ratio is unfavorable despite the multi-TP structure
+
+4. **Overtrading**: 169 trades vs V4's 36 trades indicates:
+   - The entry conditions may be too loose
+   - More trades doesn't necessarily mean better performance
+   - Transaction costs (0.1% round trip) are eating into profits
+
+### Potential Issues
+
+1. **Position Sizing**: The 2% risk per trade with tight stops results in very small position sizes that are heavily impacted by commissions
+2. **Entry Timing**: Entering on panic selling without waiting for confirmation of reversal
+3. **Market Regime**: 2025 may have had strong downtrends where shorts don't bounce back quickly
+4. **Stop Loss Placement**: 0.7 × ATR might be too tight for volatile crypto markets
+
+### Recommendations for Improvement
+
+To improve this strategy, consider:
+
+1. **Widen Stop Loss**: Increase to 1.0-1.2 × ATR to give trades more room
+2. **Add Confirmation**: Wait for a bounce/reversal candle before entering short
+3. **Reduce Trade Frequency**: Tighten entry conditions to filter for higher probability setups
+4. **Adjust RSI Range**: Test different RSI thresholds (maybe 30-50 or 25-45)
+5. **Minimum Trade Size**: Set a minimum position size to make commissions less impactful
+6. **Market Regime Filter**: Add a filter to avoid strong downtrends where mean reversion fails
+
 ## Conclusion
 
-⚠️ **Strategy performance notes**
+⚠️ **Strategy did not meet performance targets**
 
-The strategy did not achieve the target return of 20-28%.
-Max drawdown was within the target of <15%.
-Win rate was below the target range of 55-60%.
+- **Return**: -0.05% vs target 20-28%
+- **Win Rate**: 33.73% vs target 55-60%  
+- **Profit Factor**: 0.45 vs target >2.0
+- ✅ **Max Drawdown**: -0.05% (within target <15%)
+
+The strategy demonstrates that:
+- V4 shorts' success may have been period-specific or benefited from long/short combination
+- Short-only panic catching requires careful calibration to market conditions
+- Position sizing and stop placement are critical to profitability
+- More trades doesn't guarantee better results - quality over quantity matters
+
+**Next Steps**: The strategy framework is solid but needs parameter optimization and additional filters to improve win rate and profit factor. Consider backtesting on different time periods and markets to validate robustness.
 
