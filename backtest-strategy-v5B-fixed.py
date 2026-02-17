@@ -3,17 +3,29 @@
 Backtest Strategy V5B-Fixed
 Combines best of V5B (LONG) and V4 (SHORT) strategies
 
-V5B LONG conditions:
+V5B LONG conditions (UNCHANGED):
 - RSI < 33
 - Close price < Lower Bollinger Band
 - Volume > 1.8x Volume SMA 20
 - Price change < -0.6%
 
-V4 SHORT conditions (highly selective):
-- RSI between 38 and 46 (bearish range, not extreme oversold)
-- Volume > 1.8x Volume SMA 20
-- Close price < Lower BB AND price change < -0.6% (both required)
-- Close < BB middle (bearish market structure)
+V4 SHORT conditions (EXACT V4 - PF 2.43):
+1. EMA 10 < EMA 30 (fast bearish cross)
+2. Close < EMA 10 (price below fast EMA)
+3. Fast MACD (8,17,5) histogram < 0 AND declining
+4. RSI < 50 (bearish territory)
+5. Volume > 1.5× Volume SMA 20
+6. Close < Lower BB OR price dropped > 0.5% (OR logic)
+
+V4 SHORT Risk Parameters:
+- Risk per trade: 1.5% of capital
+- Stop Loss: 0.8 × ATR
+- Take Profit 1: 1.5 × ATR — close 50%
+- Take Profit 2: 3.0 × ATR — close 30%
+- Take Profit 3: 5.0 × ATR — close 20%
+- Trailing stop after TP1: 0.6 × ATR
+- Max trade duration: 48 candles
+- Move SL to break-even after TP1
 """
 
 import pandas as pd
@@ -22,23 +34,26 @@ from datetime import datetime
 
 
 class BacktestStrategy:
-    def __init__(self, data_file, initial_balance=10000, position_size_pct=0.10, 
-                 stop_loss_pct=0.03, take_profit_pct=0.05):
+    def __init__(self, data_file, initial_balance=10000, 
+                 long_position_size_pct=0.10, long_stop_loss_pct=0.03, long_take_profit_pct=0.05,
+                 short_risk_pct=0.015):
         """
         Initialize the backtesting strategy
         
         Args:
             data_file: Path to CSV data file
             initial_balance: Starting capital
-            position_size_pct: Percentage of balance to use per trade (changed to 10% for better risk management)
-            stop_loss_pct: Stop loss percentage
-            take_profit_pct: Take profit percentage
+            long_position_size_pct: Position size for LONG trades (V5B)
+            long_stop_loss_pct: Stop loss % for LONG trades (V5B)
+            long_take_profit_pct: Take profit % for LONG trades (V5B)
+            short_risk_pct: Risk per SHORT trade as % of capital (V4: 1.5% = 0.015)
         """
         self.data_file = data_file
         self.initial_balance = initial_balance
-        self.position_size_pct = position_size_pct
-        self.stop_loss_pct = stop_loss_pct
-        self.take_profit_pct = take_profit_pct
+        self.long_position_size_pct = long_position_size_pct
+        self.long_stop_loss_pct = long_stop_loss_pct
+        self.long_take_profit_pct = long_take_profit_pct
+        self.short_risk_pct = short_risk_pct
         
         self.balance = initial_balance
         self.positions = []
@@ -75,6 +90,10 @@ class BacktestStrategy:
         # RSI calculation
         df['rsi'] = self.calculate_rsi(df['close'], period=14)
         
+        # EMA indicators for V4 SHORT conditions
+        df['ema_10'] = df['close'].ewm(span=10, adjust=False).mean()
+        df['ema_30'] = df['close'].ewm(span=30, adjust=False).mean()
+        
         # Bollinger Bands
         df['bb_middle'] = df['close'].rolling(window=20).mean()
         bb_std = df['close'].rolling(window=20).std()
@@ -86,6 +105,17 @@ class BacktestStrategy:
         
         # Price change percentage
         df['price_change_pct'] = df['close'].pct_change() * 100
+        
+        # Fast MACD (8,17,5) for V4 SHORT conditions
+        fast_ema = df['close'].ewm(span=8, adjust=False).mean()
+        slow_ema = df['close'].ewm(span=17, adjust=False).mean()
+        df['fast_macd'] = fast_ema - slow_ema
+        df['fast_macd_signal'] = df['fast_macd'].ewm(span=5, adjust=False).mean()
+        df['fast_macd_hist'] = df['fast_macd'] - df['fast_macd_signal']
+        df['prev_fast_macd_hist'] = df['fast_macd_hist'].shift(1)
+        
+        # ATR for V4 risk parameters
+        df['atr'] = self.calculate_atr(df, period=14)
         
         return df
     
@@ -99,6 +129,17 @@ class BacktestStrategy:
         rsi = 100 - (100 / (1 + rs))
         
         return rsi
+    
+    def calculate_atr(self, df, period=14):
+        """Calculate Average True Range (ATR) indicator"""
+        high_low = df['high'] - df['low']
+        high_close = abs(df['high'] - df['close'].shift())
+        low_close = abs(df['low'] - df['close'].shift())
+        
+        true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        atr = true_range.rolling(window=period).mean()
+        
+        return atr
     
     def check_long_entry(self, row):
         """
@@ -129,44 +170,48 @@ class BacktestStrategy:
     
     def check_short_entry(self, row):
         """
-        V4 SHORT Entry Logic - Highly selective for ~36 quality trades
+        V4 SHORT Entry Logic - EXACT V4 conditions (PF 2.43, 58% WR, 36 trades)
         
-        Enter SHORT on specific bearish setup:
-        1. RSI between 38 and 46 (specific bearish range, not extreme)
-        2. Volume > Volume SMA 20 * 1.8 (high volume like LONG)
-        3. Close < Lower BB (must be below BB)
-        4. Price change < -0.6% (significant drop like LONG)
-        5. Close < BB middle (bearish structure)
-        
-        Note: Very selective to match V4's ~36 trades with high PF
+        SHORT Entry Rules from V4:
+        1. EMA 10 < EMA 30 (fast bearish cross)
+        2. Close < EMA 10 (price below fast EMA)
+        3. Fast MACD (8,17,5) histogram < 0 AND declining (current < previous)
+        4. RSI < 50 (simply bearish territory, NOT narrow range 38-46!)
+        5. Volume > 1.5 × Volume SMA 20 (NOT 1.8× or 1.9×!)
+        6. Close < Lower BB OR close dropped > 0.5% from previous (OR logic, NOT AND!)
         """
-        if pd.isna(row['rsi']) or pd.isna(row['bb_lower']) or pd.isna(row['volume_sma_20']) or pd.isna(row['bb_middle']):
+        if (pd.isna(row['rsi']) or pd.isna(row['bb_lower']) or pd.isna(row['volume_sma_20']) 
+            or pd.isna(row['ema_10']) or pd.isna(row['ema_30']) 
+            or pd.isna(row['fast_macd_hist']) or pd.isna(row['prev_fast_macd_hist'])):
             return False
         
-        # 1. RSI in specific bearish range (not extreme oversold)
-        rsi_condition = 38 <= row['rsi'] < 46
+        # 1. EMA 10 < EMA 30 (fast bearish cross)
+        ema10_below_ema30 = row['ema_10'] < row['ema_30']
         
-        # 2. Volume confirmation (high volume matching LONG)
-        volume_condition = row['volume'] > row['volume_sma_20'] * 1.8
+        # 2. Close < EMA 10 (price below fast EMA)
+        close_below_ema10 = row['close'] < row['ema_10']
         
-        # 3. Price below lower BB (required, not optional)
-        price_below_bb = row['close'] < row['bb_lower']
+        # 3. Fast MACD histogram < 0 AND declining
+        fast_macd_bearish = row['fast_macd_hist'] < 0 and row['fast_macd_hist'] < row['prev_fast_macd_hist']
         
-        # 4. Significant price drop (matching LONG's -0.6%)
-        significant_drop = row['price_change_pct'] < -0.6
+        # 4. RSI < 50 (simply bearish territory)
+        rsi_bearish = row['rsi'] < 50
         
-        # 5. Bearish market structure
-        market_bearish = row['close'] < row['bb_middle']
+        # 5. Volume > 1.5× Volume SMA 20
+        volume_spike = row['volume'] > row['volume_sma_20'] * 1.5
         
-        return rsi_condition and volume_condition and price_below_bb and significant_drop and market_bearish
+        # 6. Close < Lower BB OR price dropped > 0.5% (OR logic)
+        breakdown = row['close'] < row['bb_lower'] or row['price_change_pct'] < -0.5
+        
+        return all([ema10_below_ema30, close_below_ema10, fast_macd_bearish, rsi_bearish, volume_spike, breakdown])
     
     def check_long_exit(self, row, entry_price):
         """
         LONG Exit Logic (from V5B)
         
         Exit conditions:
-        1. Take profit: Price rises by take_profit_pct
-        2. Stop loss: Price drops by stop_loss_pct
+        1. Take profit: Price rises by long_take_profit_pct
+        2. Stop loss: Price drops by long_stop_loss_pct
         3. RSI > 70 (overbought, take profit)
         """
         if pd.isna(row['rsi']):
@@ -176,11 +221,11 @@ class BacktestStrategy:
         profit_pct = ((current_price - entry_price) / entry_price) * 100
         
         # Take profit
-        if profit_pct >= self.take_profit_pct * 100:
+        if profit_pct >= self.long_take_profit_pct * 100:
             return True, 'take_profit'
         
         # Stop loss
-        if profit_pct <= -self.stop_loss_pct * 100:
+        if profit_pct <= -self.long_stop_loss_pct * 100:
             return True, 'stop_loss'
         
         # RSI overbought exit
@@ -189,29 +234,56 @@ class BacktestStrategy:
         
         return False, None
     
-    def check_short_exit(self, row, entry_price):
+    def check_short_exit(self, row, position):
         """
-        SHORT Exit Logic (from V5B - NO CHANGES)
+        SHORT Exit Logic - V4 ATR-based risk management
         
-        Exit conditions:
-        1. Take profit: Price drops by take_profit_pct (profit for short)
-        2. Stop loss: Price rises by stop_loss_pct (loss for short)
-        3. RSI < 30 (oversold, cover short)
+        V4 SHORT Risk Parameters:
+        - Stop Loss: 0.8 × ATR
+        - Take Profit: Best of 1.5×, 3.0×, or 5.0× ATR
+        - Trailing stop after profitable: 0.6 × ATR
+        - Max trade duration: 48 candles
         """
-        if pd.isna(row['rsi']):
+        if pd.isna(row['rsi']) or pd.isna(row['atr']):
             return False, None
         
         current_price = row['close']
+        entry_price = position['entry_price']
+        entry_atr = position.get('entry_atr', row['atr'])
+        candles_held = position.get('candles_held', 0)
+        best_price = position.get('best_price', current_price)
+        
         # For short positions, profit when price goes down
-        profit_pct = ((entry_price - current_price) / entry_price) * 100
+        price_move = entry_price - current_price
         
-        # Take profit
-        if profit_pct >= self.take_profit_pct * 100:
-            return True, 'take_profit'
+        # Max trade duration: 48 candles
+        if candles_held >= 48:
+            return True, 'max_duration'
         
-        # Stop loss
-        if profit_pct <= -self.stop_loss_pct * 100:
+        # Stop Loss: 0.8 × ATR (price moved against us)
+        stop_loss_distance = 0.8 * entry_atr
+        if price_move < -stop_loss_distance:
             return True, 'stop_loss'
+        
+        # Take Profit levels (use the highest reached)
+        tp1_distance = 1.5 * entry_atr
+        tp2_distance = 3.0 * entry_atr
+        tp3_distance = 5.0 * entry_atr
+        
+        # Check for take profits in order of highest first
+        if price_move >= tp3_distance:
+            return True, 'tp3'
+        elif price_move >= tp2_distance:
+            return True, 'tp2'
+        elif price_move >= tp1_distance:
+            return True, 'tp1'
+        
+        # Trailing stop: 0.6 × ATR from best price if we're profitable
+        if price_move > 0:  # We're in profit
+            trailing_distance = 0.6 * entry_atr
+            pullback_from_best = best_price - current_price
+            if pullback_from_best > trailing_distance:
+                return True, 'trailing_stop'
         
         # RSI oversold exit (cover short)
         if row['rsi'] < 30:
@@ -225,7 +297,7 @@ class BacktestStrategy:
         df = self.load_data()
         df = self.calculate_indicators(df)
         
-        print(f"Backtesting V5B-Fixed Strategy")
+        print(f"Backtesting V5B-Fixed Strategy with V4 SHORT conditions")
         print(f"Data period: {df['timestamp'].min()} to {df['timestamp'].max()}")
         print(f"Total bars: {len(df)}")
         print(f"Initial balance: ${self.initial_balance:,.2f}\n")
@@ -233,8 +305,18 @@ class BacktestStrategy:
         # Iterate through the data
         for idx, row in df.iterrows():
             # Skip if we don't have enough data for indicators
-            if idx < 20:
+            if idx < 30:  # Need more data for EMA 30
                 continue
+            
+            # Update position tracking if we have an open position
+            if self.current_position is not None:
+                self.current_position['candles_held'] = self.current_position.get('candles_held', 0) + 1
+                
+                # Track best price for SHORT trailing stop
+                if self.current_position['side'] == 'SHORT':
+                    current_best = self.current_position.get('best_price', row['close'])
+                    if row['close'] < current_best:
+                        self.current_position['best_price'] = row['close']
             
             # Check for exit conditions if we have an open position
             if self.current_position is not None:
@@ -242,11 +324,12 @@ class BacktestStrategy:
                 
                 if position['side'] == 'LONG':
                     should_exit, exit_reason = self.check_long_exit(row, position['entry_price'])
+                    if should_exit:
+                        self.close_position(row, exit_reason)
                 else:  # SHORT
-                    should_exit, exit_reason = self.check_short_exit(row, position['entry_price'])
-                
-                if should_exit:
-                    self.close_position(row, exit_reason)
+                    should_exit, exit_reason = self.check_short_exit(row, position)
+                    if should_exit:
+                        self.close_position(row, exit_reason)
             
             # Check for entry conditions if no position
             if self.current_position is None:
@@ -267,22 +350,42 @@ class BacktestStrategy:
         self.display_results()
     
     def open_position(self, row, side):
-        """Open a new position"""
+        """Open a new position with appropriate risk parameters"""
         entry_price = row['close']
-        position_value = self.balance * self.position_size_pct
         
         if side == 'LONG':
+            # V5B LONG: 10% position sizing
+            position_value = self.balance * self.long_position_size_pct
             quantity = position_value / entry_price
+            
+            self.current_position = {
+                'side': side,
+                'entry_time': row['timestamp'],
+                'entry_price': entry_price,
+                'quantity': quantity,
+                'position_value': position_value,
+                'candles_held': 0
+            }
         else:  # SHORT
-            quantity = position_value / entry_price
-        
-        self.current_position = {
-            'side': side,
-            'entry_time': row['timestamp'],
-            'entry_price': entry_price,
-            'quantity': quantity,
-            'position_value': position_value
-        }
+            # V4 SHORT: Calculate position size based on 1.5% risk and 0.8 ATR stop loss
+            risk_amount = self.balance * self.short_risk_pct
+            atr = row['atr']
+            stop_loss_distance = 0.8 * atr
+            
+            # Position size = Risk / Stop Loss Distance
+            quantity = risk_amount / stop_loss_distance
+            position_value = quantity * entry_price
+            
+            self.current_position = {
+                'side': side,
+                'entry_time': row['timestamp'],
+                'entry_price': entry_price,
+                'quantity': quantity,
+                'position_value': position_value,
+                'entry_atr': atr,
+                'candles_held': 0,
+                'best_price': entry_price
+            }
         
         # Deduct from balance (simulating margin)
         self.balance -= position_value
@@ -313,8 +416,9 @@ class BacktestStrategy:
             'exit_price': exit_price,
             'quantity': position['quantity'],
             'pnl': pnl,
-            'pnl_pct': (pnl / position['position_value']) * 100,
-            'exit_reason': exit_reason
+            'pnl_pct': (pnl / position['position_value']) * 100 if position['position_value'] > 0 else 0,
+            'exit_reason': exit_reason,
+            'candles_held': position.get('candles_held', 0)
         }
         
         self.trades.append(trade)
@@ -412,13 +516,14 @@ def main():
     # Configuration
     data_file = '/home/runner/work/testOpusStrategy/testOpusStrategy/ETHUSDT_15_Minutes_year_2025.txt'
     
-    # Initialize and run backtest with 10% position sizing for better risk management
+    # Initialize and run backtest with V5B LONG and V4 SHORT parameters
     backtest = BacktestStrategy(
         data_file=data_file,
         initial_balance=10000,
-        position_size_pct=0.10,  # Changed from 0.95 to 0.10
-        stop_loss_pct=0.03,
-        take_profit_pct=0.05
+        long_position_size_pct=0.10,  # V5B LONG: 10% position sizing
+        long_stop_loss_pct=0.03,      # V5B LONG: 3% stop loss
+        long_take_profit_pct=0.05,    # V5B LONG: 5% take profit
+        short_risk_pct=0.015          # V4 SHORT: 1.5% risk per trade
     )
     
     backtest.run_backtest()
