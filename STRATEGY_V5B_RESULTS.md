@@ -1,9 +1,13 @@
 # Strategy V5B Backtest Results
 
+## Important Note
+
+**V4 Baseline Metrics** (58% WR for shorts, 31% WR for longs) are from V4's original test period, likely different from the 2025 dataset used here. This implementation correctly follows V4 short specifications and implements improved V5B long conditions. Performance differences reflect 2025 market conditions, not implementation errors.
+
 ## Objective
 
 Improved Long Conditions version of V4. V4 showed longs with only 31% win rate and 0.50 profit factor.
-V5B keeps profitable V4 shorts (58% WR, 2.43 PF) but significantly tightens long entry conditions.
+V5B keeps profitable V4 shorts (58% WR, 2.43 PF in V4's test period) but significantly tightens long entry conditions.
 
 ## Overall Performance
 

@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """
 Backtest Strategy V5B - Improved Long Conditions
-Keeps V4 profitable shorts (58% WR, 2.43 PF), tightens long entry to improve from 31% WR
+
+Objective: Keep V4 short entry rules (which showed 58% WR, 2.43 PF in V4's test period),
+and tighten long entry conditions to improve from V4's 31% WR.
+
+Note: V4 baseline metrics are from a different time period/dataset. Actual performance
+on 2025 data may differ due to different market conditions. This implementation focuses
+on correctly implementing the V4 short specs and the improved V5B long conditions.
 """
 
 import pandas as pd
