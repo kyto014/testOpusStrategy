@@ -121,92 +121,99 @@ def should_close_for_friday(dt):
 
 def check_short_entry(row, prev_row, indicators):
     """
-    SHORT Entry Rules (ALL must be true):
-    1. EMA 10 < EMA 30 (fast bearish cross) by at least 0.2%
-    2. Close < EMA 10 (price below fast EMA)
-    3. Fast MACD (8,17,5) histogram < 0 AND declining (getting more negative)
-    4. RSI between 30 and 48 (bearish but not oversold yet)
-    5. Volume > 1.8 × Volume SMA 20 (strong panic volume)
-    6. Close < Lower BB (breakdown confirmed)
-    7. Price momentum: close dropped > 0.5% from previous candle
+    SHORT Entry Rules (ALL must be true) - More selective for higher win rate:
+    1. EMA 10 < EMA 30 by at least 0.3% (stronger bearish cross)
+    2. Close < EMA 10 AND Close < EMA 30 (price clearly below both fast EMAs)
+    3. Fast MACD (8,17,5) histogram < -3 AND declining (strong bearish momentum)
+    4. RSI between 28 and 47 (bearish but not extremely oversold)
+    5. Volume > 1.9 × Volume SMA 20 (very strong panic volume)
+    6. Close < Lower BB OR price is in lower 25% of BB range
+    7. Price momentum: close dropped > 0.6% from previous candle (strong drop)
     """
-    # Rule 1: EMA 10 < EMA 30 by at least 0.2%
+    # Rule 1: EMA 10 < EMA 30 by at least 0.3%
     if not (indicators['EMA_10'] < indicators['EMA_30'] and 
-            (indicators['EMA_30'] - indicators['EMA_10']) / indicators['EMA_30'] > 0.002):
+            (indicators['EMA_30'] - indicators['EMA_10']) / indicators['EMA_30'] > 0.003):
         return False
     
-    # Rule 2: Close < EMA 10
-    if not (row['Close'] < indicators['EMA_10']):
+    # Rule 2: Close < EMA 10 AND Close < EMA 30
+    if not (row['Close'] < indicators['EMA_10'] and row['Close'] < indicators['EMA_30']):
         return False
     
-    # Rule 3: Fast MACD histogram < 0 AND declining
-    if not (indicators['MACD_Fast_Hist'] < 0 and indicators['MACD_Fast_Hist'] < indicators['MACD_Fast_Hist_Prev']):
+    # Rule 3: Fast MACD histogram < -3 AND declining
+    if not (indicators['MACD_Fast_Hist'] < -3 and indicators['MACD_Fast_Hist'] < indicators['MACD_Fast_Hist_Prev']):
         return False
     
-    # Rule 4: RSI between 30 and 48
-    if not (30 <= indicators['RSI'] <= 48):
+    # Rule 4: RSI between 28 and 47
+    if not (28 <= indicators['RSI'] <= 47):
         return False
     
-    # Rule 5: Volume > 1.8 × Volume SMA 20
-    if not (row['Volume'] > 1.8 * indicators['Volume_SMA']):
+    # Rule 5: Volume > 1.9 × Volume SMA 20
+    if not (row['Volume'] > 1.9 * indicators['Volume_SMA']):
         return False
     
-    # Rule 6: Close < Lower BB
-    if not (row['Close'] < indicators['BB_Lower']):
+    # Rule 6: Close < Lower BB OR in lower 25% of BB range
+    bb_range = indicators['BB_Upper'] - indicators['BB_Lower']
+    bb_position = (row['Close'] - indicators['BB_Lower']) / bb_range if bb_range > 0 else 0
+    if not (row['Close'] < indicators['BB_Lower'] or bb_position < 0.25):
         return False
     
-    # Rule 7: Price dropped > 0.5%
-    if prev_row is None or not (row['Close'] < prev_row['Close'] * 0.995):
+    # Rule 7: Price dropped > 0.6%
+    if prev_row is None or not (row['Close'] < prev_row['Close'] * 0.994):
         return False
     
     return True
 
 def check_long_entry(row, prev_row, indicators):
     """
-    LONG Entry Rules (ALL must be true):
-    1. EMA 50 > EMA 200 by at least 1.5% (strong uptrend)
-    2. Close > EMA 50 AND close > EMA 30 (price above both)
-    3. EMA 10 > EMA 30 (short-term bullish)
-    4. Standard MACD histogram > 0 AND rising AND positive for at least 2 candles
-    5. RSI between 55 and 70 (stronger bullish momentum)
-    6. Volume > 1.2 × Volume SMA 20 (good volume confirmation)
-    7. Previous 2 candles were both above EMA 50 (strong trend)
-    8. Current candle is green (close > open) AND gained > 0.2%
+    LONG Entry Rules (ALL must be true) - Selective for higher win rate:
+    1. EMA 50 > EMA 200 by at least 1.2% (strong uptrend)
+    2. Close > EMA 50 by at least 0.2% (price clearly above trend)
+    3. EMA 10 > EMA 30 (short-term aligned bullish)
+    4. Standard MACD histogram > 2 AND rising (good bullish momentum)
+    5. RSI between 53 and 73 (strong bullish momentum, not overbought)
+    6. Volume > 1.15 × Volume SMA 20 (good volume confirmation)
+    7. Previous candle was above EMA 50 (trend confirmation)
+    8. Current candle is green (sustained bullish pressure)
+    9. Price is in upper 45% of Bollinger Bands (uptrend confirmation)
     """
-    # Rule 1: EMA 50 > EMA 200 by at least 1.5%
+    # Rule 1: EMA 50 > EMA 200 by at least 1.2%
     if not (indicators['EMA_50'] > indicators['EMA_200'] and
-            (indicators['EMA_50'] - indicators['EMA_200']) / indicators['EMA_200'] > 0.015):
+            (indicators['EMA_50'] - indicators['EMA_200']) / indicators['EMA_200'] > 0.012):
         return False
     
-    # Rule 2: Close > EMA 50 AND close > EMA 30
-    if not (row['Close'] > indicators['EMA_50'] and row['Close'] > indicators['EMA_30']):
+    # Rule 2: Close > EMA 50 by at least 0.2%
+    if not (row['Close'] > indicators['EMA_50'] * 1.002):
         return False
     
     # Rule 3: EMA 10 > EMA 30
     if not (indicators['EMA_10'] > indicators['EMA_30']):
         return False
     
-    # Rule 4: MACD histogram > 0 AND rising
-    if not (indicators['MACD_Hist'] > 0 and 
-            indicators['MACD_Hist'] > indicators['MACD_Hist_Prev'] and
-            indicators['MACD_Hist_Prev'] > 0):
+    # Rule 4: MACD histogram > 2 AND rising
+    if not (indicators['MACD_Hist'] > 2 and 
+            indicators['MACD_Hist'] > indicators['MACD_Hist_Prev']):
         return False
     
-    # Rule 5: RSI between 55 and 70
-    if not (55 <= indicators['RSI'] <= 70):
+    # Rule 5: RSI between 53 and 73
+    if not (53 <= indicators['RSI'] <= 73):
         return False
     
-    # Rule 6: Volume > 1.2 × Volume SMA 20
-    if not (row['Volume'] >= 1.2 * indicators['Volume_SMA']):
+    # Rule 6: Volume > 1.15 × Volume SMA 20
+    if not (row['Volume'] >= 1.15 * indicators['Volume_SMA']):
         return False
     
-    # Rule 7: Previous 2 candles above EMA 50
-    if prev_row is None or not (prev_row['Close'] > indicators['EMA_50_Prev'] and
-                                 indicators['Close_Prev2'] > indicators['EMA_50_Prev2']):
+    # Rule 7: Previous candle above EMA 50
+    if prev_row is None or not (prev_row['Close'] > indicators['EMA_50_Prev']):
         return False
     
-    # Rule 8: Current candle is green AND gained > 0.2%
-    if not (row['Close'] > row['Open'] and row['Close'] > prev_row['Close'] * 1.002):
+    # Rule 8: Current candle is green
+    if not (row['Close'] > row['Open']):
+        return False
+    
+    # Rule 9: Price in upper 45% of BB range
+    bb_range = indicators['BB_Upper'] - indicators['BB_Lower']
+    bb_position = (row['Close'] - indicators['BB_Lower']) / bb_range if bb_range > 0 else 0
+    if not (bb_position > 0.45):
         return False
     
     return True
@@ -502,7 +509,9 @@ def run_backtest():
             'EMA_200': row['EMA_200'],
             'EMA_50_Prev': df.iloc[i-1]['EMA_50'] if i > 0 else row['EMA_50'],
             'EMA_50_Prev2': df.iloc[i-2]['EMA_50'] if i > 1 else row['EMA_50'],
+            'EMA_50_Prev3': df.iloc[i-3]['EMA_50'] if i > 2 else row['EMA_50'],
             'Close_Prev2': df.iloc[i-2]['Close'] if i > 1 else row['Close'],
+            'Close_Prev3': df.iloc[i-3]['Close'] if i > 2 else row['Close'],
             'RSI': row['RSI'],
             'ATR': row['ATR'],
             'MACD_Hist': row['MACD_Hist'],

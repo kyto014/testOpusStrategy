@@ -10,60 +10,60 @@ This strategy uses completely different approaches for LONG and SHORT trades:
 ## Overall Performance
 
 - **Initial Capital**: $100,000.00
-- **Final Capital**: $85,565.82
-- **Total Return**: $-14,434.18 (-14.43%)
-- **Max Drawdown**: 28.09% ($28,086.81)
-- **Total Trades**: 85
+- **Final Capital**: $134,280.89
+- **Total Return**: $34,280.89 (34.28%)
+- **Max Drawdown**: 18.62% ($21,639.63)
+- **Total Trades**: 65
 
-- **Sharpe Ratio**: -0.30
+- **Sharpe Ratio**: 1.22
 
 ## LONG Trades Analysis
 
-- **Total LONG Trades**: 19
-- **Win Rate**: 31.58%
-- **Average PnL**: $-166.79
-- **Average Duration**: 9.6 candles (2.4 hours)
-- **Profit Factor**: 0.82
+- **Total LONG Trades**: 29
+- **Win Rate**: 31.03%
+- **Average PnL**: $-828.58
+- **Average Duration**: 11.7 candles (2.9 hours)
+- **Profit Factor**: 0.50
 
 ## SHORT Trades Analysis
 
-- **Total SHORT Trades**: 66
-- **Win Rate**: 36.36%
-- **Average PnL**: $-170.68
-- **Average Duration**: 4.4 candles (1.1 hours)
-- **Profit Factor**: 0.89
+- **Total SHORT Trades**: 36
+- **Win Rate**: 58.33%
+- **Average PnL**: $1619.71
+- **Average Duration**: 5.4 candles (1.3 hours)
+- **Profit Factor**: 2.43
 
 ## Monthly Returns
 
 | Month | PnL (USD) | PnL (%) |
 |-------|-----------|----------|
-| 2025-01 | $-13,806.95 | -13.81% |
-| 2025-02 | $7,653.51 | 7.65% |
-| 2025-03 | $-6,156.79 | -6.16% |
-| 2025-04 | $-5,881.74 | -5.88% |
-| 2025-05 | $-2,575.61 | -2.58% |
-| 2025-06 | $8,587.50 | 8.59% |
-| 2025-07 | $-8,115.55 | -8.12% |
-| 2025-08 | $-6,418.81 | -6.42% |
-| 2025-09 | $-1,372.38 | -1.37% |
-| 2025-10 | $3,690.89 | 3.69% |
-| 2025-11 | $11,715.49 | 11.72% |
-| 2025-12 | $-1,753.74 | -1.75% |
+| 2025-01 | $-4,614.49 | -4.61% |
+| 2025-02 | $4,963.40 | 4.96% |
+| 2025-03 | $2,016.04 | 2.02% |
+| 2025-04 | $8,313.85 | 8.31% |
+| 2025-05 | $-768.42 | -0.77% |
+| 2025-06 | $-2,517.70 | -2.52% |
+| 2025-07 | $-6,892.50 | -6.89% |
+| 2025-08 | $-4,669.91 | -4.67% |
+| 2025-10 | $8,017.20 | 8.02% |
+| 2025-11 | $31,908.68 | 31.91% |
+| 2025-12 | $-1,475.27 | -1.48% |
 
 ## Exit Reasons
 
 ### LONG Trades
 
-- STOP_LOSS: 12 (63.2%)
-- RSI_OVERBOUGHT: 6 (31.6%)
-- FULLY_CLOSED: 1 (5.3%)
+- STOP_LOSS: 20 (69.0%)
+- RSI_OVERBOUGHT: 6 (20.7%)
+- TRAILING_STOP: 2 (6.9%)
+- FULLY_CLOSED: 1 (3.4%)
 
 ### SHORT Trades
 
-- STOP_LOSS: 43 (65.2%)
-- TRAILING_STOP: 11 (16.7%)
-- RSI_OVERSOLD: 8 (12.1%)
-- FULLY_CLOSED: 4 (6.1%)
+- STOP_LOSS: 17 (47.2%)
+- TRAILING_STOP: 9 (25.0%)
+- RSI_OVERSOLD: 9 (25.0%)
+- FULLY_CLOSED: 1 (2.8%)
 
 ## Strategy Parameters
 
