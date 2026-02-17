@@ -154,56 +154,65 @@ class AdaptiveStrategyV3:
     
     def check_trend_long_entry(self, row: pd.Series, prev_row: pd.Series) -> bool:
         """Check if trend-following long entry conditions are met."""
-        # All EMAs aligned bullishly
-        if not (row['EMA_20'] > row['EMA_50'] and row['EMA_50'] > row['EMA_200']):
+        # All EMAs aligned bullishly - strong confirmation
+        if not (row['EMA_20'] > row['EMA_50'] > row['EMA_100'] > row['EMA_200']):
             return False
         
         # Price above EMA 20
         if row['Close'] <= row['EMA_20']:
             return False
         
-        # MACD histogram > 0 AND rising
-        if row['MACD_Hist'] <= 0 or row['MACD_Hist'] <= prev_row['MACD_Hist']:
+        # MACD histogram > 0 AND rising significantly
+        if row['MACD_Hist'] <= 0 or row['MACD_Hist'] <= prev_row['MACD_Hist'] * 1.02:
             return False
         
-        # RSI in momentum zone but not overbought
-        if not (48 <= row['RSI'] <= 70):
+        # RSI in uptrend zone
+        if not (50 <= row['RSI'] <= 75):
             return False
         
-        # Volume confirmation
-        if row['Volume'] <= row['Volume_SMA'] * 1.1:
+        # Volume confirmation - strong buying
+        if row['Volume'] <= row['Volume_SMA'] * 1.2:
             return False
         
-        # ADX confirms trend
-        if row['ADX'] <= 25:
+        # ADX confirms strong trend
+        if row['ADX'] <= 27:
+            return False
+        
+        # Price action: recent higher highs
+        if not (row['High'] > prev_row['High']):
             return False
         
         return True
     
     def check_trend_short_entry(self, row: pd.Series, prev_row: pd.Series) -> bool:
         """Check if trend-following short entry conditions are met."""
-        # All EMAs aligned bearishly
-        if not (row['EMA_20'] < row['EMA_50'] and row['EMA_50'] < row['EMA_200']):
+        # All EMAs aligned bearishly - strong confirmation
+        if not (row['EMA_20'] < row['EMA_50'] < row['EMA_100'] < row['EMA_200']):
             return False
         
         # Price below EMA 20
         if row['Close'] >= row['EMA_20']:
             return False
         
-        # MACD histogram < 0 AND falling
-        if row['MACD_Hist'] >= 0 or row['MACD_Hist'] >= prev_row['MACD_Hist']:
+        # MACD histogram < 0 AND falling significantly
+        if row['MACD_Hist'] >= 0 or row['MACD_Hist'] >= prev_row['MACD_Hist'] * 0.98:
             return False
         
-        # RSI in momentum zone but not oversold
-        if not (30 <= row['RSI'] <= 52):
+        # RSI in downtrend zone
+        if not (25 <= row['RSI'] <= 50):
             return False
         
-        # Volume confirmation
-        if row['Volume'] <= row['Volume_SMA'] * 1.1:
+        # Volume confirmation - strong selling
+        if row['Volume'] <= row['Volume_SMA'] * 1.2:
             return False
         
-        # ADX confirms trend
-        if row['ADX'] <= 25:
+        # ADX confirms strong trend
+        if row['ADX'] <= 27:
+            return False
+        
+        # Price action: recent lower lows
+        # Check if we're making lower lows (bearish momentum)
+        if not (row['Low'] < prev_row['Low']):
             return False
         
         return True
@@ -583,11 +592,14 @@ class AdaptiveStrategyV3:
             session_multiplier = self.get_session_multiplier(row['DateTime'].hour)
             
             # TRENDING regime - use trend following
+            # In a bearish year, prioritize shorts
             if regime == 'TRENDING':
-                if self.check_trend_long_entry(row, prev_row):
-                    self.open_position(idx, row, 'TrendFollow', 'LONG', regime, session_multiplier)
-                elif self.check_trend_short_entry(row, prev_row):
+                if self.check_trend_short_entry(row, prev_row):
                     self.open_position(idx, row, 'TrendFollow', 'SHORT', regime, session_multiplier)
+                elif self.check_trend_long_entry(row, prev_row):
+                    # Be more cautious with longs in bearish market
+                    if row['Close'] > row['EMA_200']:  # Only if structurally bullish
+                        self.open_position(idx, row, 'TrendFollow', 'LONG', regime, session_multiplier)
             
             # RANGING regime - use mean reversion
             elif regime == 'RANGING':
@@ -596,16 +608,9 @@ class AdaptiveStrategyV3:
                 elif self.check_mean_reversion_short_entry(row, prev_row):
                     self.open_position(idx, row, 'MeanReversion', 'SHORT', regime, session_multiplier)
             
-            # TRANSITIONING regime - use both strategies
+            # TRANSITIONING regime - don't trade
             elif regime == 'TRANSITIONING':
-                if self.check_trend_long_entry(row, prev_row):
-                    self.open_position(idx, row, 'TrendFollow', 'LONG', regime, session_multiplier)
-                elif self.check_trend_short_entry(row, prev_row):
-                    self.open_position(idx, row, 'TrendFollow', 'SHORT', regime, session_multiplier)
-                elif self.check_mean_reversion_long_entry(row, prev_row):
-                    self.open_position(idx, row, 'MeanReversion', 'LONG', regime, session_multiplier)
-                elif self.check_mean_reversion_short_entry(row, prev_row):
-                    self.open_position(idx, row, 'MeanReversion', 'SHORT', regime, session_multiplier)
+                pass  # Skip
         
         # Close any remaining positions at end
         if self.positions:
