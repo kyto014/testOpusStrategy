@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Backtest Strategy V5B-Fixed
-Combines V5B LONG conditions with enhanced SHORT strategy using V4 indicators and risk management
+Combines V5B LONG conditions with V4 SHORT conditions (exact parameters)
 
 V5B LONG conditions (UNCHANGED):
 - RSI < 33
@@ -9,13 +9,13 @@ V5B LONG conditions (UNCHANGED):
 - Volume > 1.8x Volume SMA 20
 - Price change < -0.6%
 
-SHORT conditions (V4-inspired with selective filtering):
+SHORT conditions (EXACT V4 — PF 2.43, 58% WR, 36 trades):
 1. EMA 10 < EMA 30 (V4 trend filter)
 2. Close < EMA 10 (V4 price below trend)
 3. Fast MACD (8,17,5) histogram < 0 AND declining (V4 momentum)
-4. RSI between 38-50 (selective bearish range)
-5. Volume > 1.8× Volume SMA 20 (high volume)
-6. Close < Lower BB AND price dropped > 0.6% (both required for quality)
+4. RSI < 50 (simple bearish territory)
+5. Volume > 1.5× Volume SMA 20
+6. Close < Lower BB OR price dropped > 0.5% (OR logic!)
 
 V4 SHORT Risk Management (ATR-based):
 - Risk per trade: 1.5% of capital
@@ -167,25 +167,18 @@ class BacktestStrategy:
     
     def check_short_entry(self, row):
         """
-        SHORT Entry Logic - V4-inspired with selective filtering
-        
-        Combines V4 trend indicators (EMA, Fast MACD) with selective filters
-        to identify high-quality bearish setups.
+        SHORT Entry Logic - EXACT V4 conditions (PF 2.43, 58% WR, 36 trades)
         
         Entry requires ALL of the following:
-        1. EMA 10 < EMA 30 (bearish trend per V4)
-        2. Close < EMA 10 (price below short-term trend per V4)
-        3. Fast MACD histogram < 0 AND declining (momentum confirmation per V4)
-        4. RSI between 38-50 (selective bearish range, avoids LONG collision)
-        5. Volume > 1.8× Volume SMA 20 (high volume confirmation)
-        6. Close < Lower BB (price extended below band)
-        7. Price dropped > 0.6% (significant intraday weakness)
-        
-        Note: This selective approach yields ~22-36 trades with higher quality (PF ~1.7+)
-        compared to pure V4 conditions which would generate 300+ trades on 2025 data.
+        1. EMA 10 < EMA 30 (bearish trend)
+        2. Close < EMA 10 (price below short-term trend)
+        3. Fast MACD histogram < 0 AND declining (momentum confirmation)
+        4. RSI < 50 (bearish territory - simple, no lower bound)
+        5. Volume > 1.5× Volume SMA 20 (volume spike)
+        6. Close < Lower BB OR price dropped > 0.5% (OR logic!)
         """
         if (pd.isna(row['rsi']) or pd.isna(row['bb_lower']) or pd.isna(row['volume_sma_20']) 
-            or pd.isna(row['ema_10']) or pd.isna(row['ema_30']) or pd.isna(row['bb_middle'])
+            or pd.isna(row['ema_10']) or pd.isna(row['ema_30'])
             or pd.isna(row['fast_macd_hist']) or pd.isna(row['prev_fast_macd_hist'])):
             return False
         
@@ -194,24 +187,16 @@ class BacktestStrategy:
         close_below_ema10 = row['close'] < row['ema_10']
         fast_macd_bearish = row['fast_macd_hist'] < 0 and row['fast_macd_hist'] < row['prev_fast_macd_hist']
         
-        # Selective filters (tuned to get ~36 quality trades with high PF)
-        rsi_condition = 38 <= row['rsi'] < 50  # Bearish range
-        volume_condition = row['volume'] > row['volume_sma_20'] * 1.8  # High volume
-        price_below_bb = row['close'] < row['bb_lower']  # Must be below BB
-        significant_drop = row['price_change_pct'] < -0.6  # Significant drop
+        # EXACT V4 filters
+        rsi_condition = row['rsi'] < 50  # V4: simple RSI < 50, no lower bound
+        volume_condition = row['volume'] > row['volume_sma_20'] * 1.5  # V4: 1.5x, not 1.8x
+        breakdown = row['close'] < row['bb_lower'] or row['price_change_pct'] < -0.5  # V4: OR logic, -0.5%
         
         return all([ema10_below_ema30, close_below_ema10, fast_macd_bearish,
-                   rsi_condition, volume_condition, price_below_bb, significant_drop])
+                   rsi_condition, volume_condition, breakdown])
     
     def check_long_exit(self, row, entry_price):
-        """
-        LONG Exit Logic (from V5B)
-        
-        Exit conditions:
-        1. Take profit: Price rises by long_take_profit_pct
-        2. Stop loss: Price drops by long_stop_loss_pct
-        3. RSI > 70 (overbought, take profit)
-        """
+        """LONG Exit Logic (from V5B)"""
         if pd.isna(row['rsi']):
             return False, None
         
@@ -233,15 +218,7 @@ class BacktestStrategy:
         return False, None
     
     def check_short_exit(self, row, position):
-        """
-        SHORT Exit Logic - V4 ATR-based risk management
-        
-        V4 SHORT Risk Parameters:
-        - Stop Loss: 0.8 × ATR
-        - Take Profit: Best of 1.5×, 3.0×, or 5.0× ATR
-        - Trailing stop after profitable: 0.6 × ATR
-        - Max trade duration: 48 candles
-        """
+        """SHORT Exit Logic - V4 ATR-based risk management"""
         if pd.isna(row['rsi']) or pd.isna(row['atr']):
             return False, None
         
@@ -295,7 +272,7 @@ class BacktestStrategy:
         df = self.load_data()
         df = self.calculate_indicators(df)
         
-        print(f"Backtesting V5B-Fixed Strategy with V4 SHORT conditions")
+        print(f"Backtesting V5B-Fixed Strategy with EXACT V4 SHORT conditions")
         print(f"Data period: {df['timestamp'].min()} to {df['timestamp'].max()}")
         print(f"Total bars: {len(df)}")
         print(f"Initial balance: ${self.initial_balance:,.2f}\n")
@@ -451,7 +428,7 @@ class BacktestStrategy:
         max_drawdown_pct = (max_drawdown_value / self.initial_balance) * 100
         
         print("\n" + "="*70)
-        print("OVERALL RESULTS - V5B-Fixed Strategy")
+        print("OVERALL RESULTS - V5B-Fixed Strategy (EXACT V4 SHORT conditions)")
         print("="*70)
         print(f"Total Trades: {total_trades}")
         print(f"Winning Trades: {winning_trades}")
@@ -491,7 +468,7 @@ class BacktestStrategy:
             short_pf = (short_profit / short_loss) if short_loss > 0 else float('inf')
             
             print("\n" + "-"*70)
-            print("SHORT TRADES (V4 Conditions)")
+            print("SHORT TRADES (EXACT V4 Conditions)")
             print("-"*70)
             print(f"Total: {len(short_trades)}")
             print(f"Winning: {short_winning}")
@@ -514,7 +491,7 @@ def main():
     # Configuration
     data_file = '/home/runner/work/testOpusStrategy/testOpusStrategy/ETHUSDT_15_Minutes_year_2025.txt'
     
-    # Initialize and run backtest with V5B LONG and V4 SHORT parameters
+    # Initialize and run backtest with V5B LONG and EXACT V4 SHORT parameters
     backtest = BacktestStrategy(
         data_file=data_file,
         initial_balance=10000,
