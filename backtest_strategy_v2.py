@@ -131,93 +131,61 @@ def should_close_for_weekend(date):
 
 def generate_trend_signal(row, prev_hist):
     """
-    Generate trend-following signals - MORE SELECTIVE
+    Generate trend-following signals - ULTRA-CONSERVATIVE, HIGH QUALITY ONLY
     Returns: 'LONG', 'SHORT', or None
     """
-    # Stronger trend filter
-    ema_separation = abs(row['EMA_20'] - row['EMA_100']) / row['Close']
-    if ema_separation < 0.005:  # Need at least 0.5% separation
+    # Require strong trend
+    if row['ADX'] < 26:
         return None
     
-    # LONG Trend Signal - stricter conditions for quality
-    if (row['EMA_20'] > row['EMA_100'] and
-        row['EMA_100'] > row['EMA_200'] and  # All EMAs aligned
+    # EMAs must show clear direction with good separation
+    ema_20_100_sep = abs(row['EMA_20'] - row['EMA_100']) / row['Close']
+    ema_100_200_sep = abs(row['EMA_100'] - row['EMA_200']) / row['Close']
+    
+    if ema_20_100_sep < 0.010 or ema_100_200_sep < 0.008:  # Strong separation
+        return None
+    
+    # Bollinger Band position
+    bb_range = row['BB_Upper'] - row['BB_Lower']
+    if bb_range == 0:
+        return None
+    bb_position = (row['Close'] - row['BB_Lower']) / bb_range
+    
+    # LONG Trend Signal - high quality
+    if (row['EMA_20'] > row['EMA_100'] > row['EMA_200'] and  # Perfect cascade
         row['Close'] > row['EMA_20'] and
         row['MACD_Hist'] > 0 and
-        row['MACD_Hist'] > prev_hist and  # Rising histogram
-        35 < row['RSI'] < 70 and  # Not oversold, not overbought
-        row['Volume'] > 1.2 * row['Volume_SMA'] and  # Strong volume
-        row['Close'] > row['BB_Middle']):  # Above BB middle
+        row['MACD_Hist'] > prev_hist and
+        44 < row['RSI'] < 66 and  # Sweet spot range
+        row['Volume'] > 1.5 * row['Volume_SMA'] and  # Strong volume
+        0.48 < bb_position < 0.78):  # Middle-upper range
         return 'LONG'
     
-    # SHORT Trend Signal - stricter conditions for quality
-    if (row['EMA_20'] < row['EMA_100'] and
-        row['EMA_100'] < row['EMA_200'] and  # All EMAs aligned
+    # SHORT Trend Signal - high quality
+    if (row['EMA_20'] < row['EMA_100'] < row['EMA_200'] and  # Perfect cascade
         row['Close'] < row['EMA_20'] and
         row['MACD_Hist'] < 0 and
-        row['MACD_Hist'] < prev_hist and  # Falling histogram
-        30 < row['RSI'] < 65 and  # Not oversold, not overbought
-        row['Volume'] > 1.2 * row['Volume_SMA'] and  # Strong volume
-        row['Close'] < row['BB_Middle']):  # Below BB middle
+        row['MACD_Hist'] < prev_hist and
+        34 < row['RSI'] < 56 and  # Sweet spot range
+        row['Volume'] > 1.5 * row['Volume_SMA'] and  # Strong volume
+        0.22 < bb_position < 0.52):  # Middle-lower range
         return 'SHORT'
     
     return None
 
 def generate_breakout_signal(row, prev_row):
     """
-    Generate breakout signals - SELECTIVE QUALITY BREAKOUTS
-    Returns: 'LONG', 'SHORT', or None
+    Generate breakout signals - DISABLED (not working in this market)
+    Returns: None
     """
-    # Need to check if breaking out of PREVIOUS Donchian channel
-    if prev_row is None:
-        return None
-    
-    # LONG Breakout Signal - strong breakout with confirmation
-    if (row['High'] > prev_row['Donchian_Upper'] and
-        row['Close'] > prev_row['Donchian_Upper'] and  # Close above too
-        row['ADX'] > 20 and  # Strong trend
-        row['Volume'] > 1.5 * row['Volume_SMA'] and  # Very strong volume
-        row['RSI'] > 50 and row['RSI'] < 75 and  # Momentum but not extreme
-        row['Close'] > row['EMA_200'] and
-        row['MACD_Hist'] > 0):  # Bullish MACD
-        return 'LONG'
-    
-    # SHORT Breakout Signal - strong breakdown with confirmation
-    if (row['Low'] < prev_row['Donchian_Lower'] and
-        row['Close'] < prev_row['Donchian_Lower'] and  # Close below too
-        row['ADX'] > 20 and  # Strong trend
-        row['Volume'] > 1.5 * row['Volume_SMA'] and  # Very strong volume
-        row['RSI'] > 25 and row['RSI'] < 50 and  # Momentum but not extreme
-        row['Close'] < row['EMA_200'] and
-        row['MACD_Hist'] < 0):  # Bearish MACD
-        return 'SHORT'
-    
-    return None
+    return None  # Disable breakouts - losing too much money
 
 def generate_mean_reversion_signal(row, prev_hist):
     """
-    Generate mean reversion signals (counter-trend, smaller size) - VERY SELECTIVE
-    Returns: 'LONG', 'SHORT', or None
+    Generate mean reversion signals - DISABLED (not working in this market)
+    Returns: None
     """
-    # LONG Mean Reversion (oversold bounce in strong uptrend)
-    if (row['Close'] <= row['BB_Lower'] and
-        row['RSI'] < 30 and  # Strongly oversold
-        row['MACD_Hist'] > prev_hist and  # Momentum turning up
-        row['EMA_20'] > row['EMA_100'] and  # Strong uptrend
-        row['EMA_100'] > row['EMA_200'] and  # All EMAs aligned up
-        row['Volume'] > row['Volume_SMA']):  # Volume confirmation
-        return 'LONG'
-    
-    # SHORT Mean Reversion (overbought drop in strong downtrend)
-    if (row['Close'] >= row['BB_Upper'] and
-        row['RSI'] > 70 and  # Strongly overbought
-        row['MACD_Hist'] < prev_hist and  # Momentum turning down
-        row['EMA_20'] < row['EMA_100'] and  # Strong downtrend
-        row['EMA_100'] < row['EMA_200'] and  # All EMAs aligned down
-        row['Volume'] > row['Volume_SMA']):  # Volume confirmation
-        return 'SHORT'
-    
-    return None
+    return None  # Disable mean reversion - losing too much money
 
 def check_spread_filter(row):
     """Check if ATR/Close is sufficient (> 0.001)"""
@@ -491,32 +459,17 @@ def run_backtest(df, initial_capital=100000):
             prev_hist = df.iloc[i-1]['MACD_Hist'] if i > 0 else 0
             prev_row = df.iloc[i-1] if i > 0 else None
             
-            # Try each signal type
+            # Try each signal type - ONLY TREND SIGNALS (others disabled)
             signal = None
             signal_type = None
             risk_percent = None
             
-            # Trend signal (1.5% risk - increased for fewer, better quality trades)
+            # Trend signal ONLY (1.2% risk as per requirements)
             trend_signal = generate_trend_signal(row, prev_hist)
             if trend_signal:
                 signal = trend_signal
                 signal_type = 'Trend'
-                risk_percent = 0.015
-            
-            # Breakout signal (1.8% risk) - higher priority if found
-            breakout_signal = generate_breakout_signal(row, prev_row)
-            if breakout_signal:
-                signal = breakout_signal
-                signal_type = 'Breakout'
-                risk_percent = 0.018
-            
-            # Mean reversion signal (0.8% risk) - only if no other signal
-            if not signal:
-                mr_signal = generate_mean_reversion_signal(row, prev_hist)
-                if mr_signal:
-                    signal = mr_signal
-                    signal_type = 'MeanReversion'
-                    risk_percent = 0.008
+                risk_percent = 0.012
             
             # If signal found, check pyramiding rules
             if signal:
@@ -550,20 +503,20 @@ def run_backtest(df, initial_capital=100000):
                     
                     base_risk_usdt = capital * risk_percent
                     adjusted_risk = base_risk_usdt * session_multiplier
-                    sl_distance = 0.8 * row['ATR']  # Match the SL calculation
+                    sl_distance = 0.7 * row['ATR']  # Match tighter SL
                     position_size = adjusted_risk / sl_distance
                     
-                    # Calculate SL and TP levels (better risk:reward)
+                    # Calculate SL and TP levels - tight stops, reasonable targets
                     if signal == 'LONG':
-                        stop_loss = current_price - 0.8 * row['ATR']
-                        tp1 = current_price + 2.0 * row['ATR']  # 2.5:1 R:R
-                        tp2 = current_price + 3.5 * row['ATR']  # 4.4:1 R:R
-                        tp3 = current_price + 5.5 * row['ATR']  # 6.9:1 R:R
+                        stop_loss = current_price - 0.7 * row['ATR']  # Tighter SL
+                        tp1 = current_price + 1.8 * row['ATR']  # 2.57:1 R:R
+                        tp2 = current_price + 3.2 * row['ATR']  # 4.57:1 R:R
+                        tp3 = current_price + 5.0 * row['ATR']  # 7.14:1 R:R
                     else:  # SHORT
-                        stop_loss = current_price + 0.8 * row['ATR']
-                        tp1 = current_price - 2.0 * row['ATR']
-                        tp2 = current_price - 3.5 * row['ATR']
-                        tp3 = current_price - 5.5 * row['ATR']
+                        stop_loss = current_price + 0.7 * row['ATR']
+                        tp1 = current_price - 1.8 * row['ATR']
+                        tp2 = current_price - 3.2 * row['ATR']
+                        tp3 = current_price - 5.0 * row['ATR']
                     
                     # Entry commission
                     entry_commission = 0.0005 * current_price * position_size
